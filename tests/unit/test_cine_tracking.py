@@ -209,6 +209,36 @@ def test_a_loop_with_no_usable_frames_abstains():
     assert morphology.reportable_follicle_count == (None, "not_assessed")
 
 
+def test_a_broken_track_never_reports_zero_follicles():
+    """When tracking collapses, withhold the estimate — do not claim zero.
+
+    A reported count of zero is a strong clinical claim: *this ovary has no
+    follicles*. When the probe moves faster than the tracker can follow, zero
+    surviving tracks means "we could not follow anything", which is a completely
+    different statement. The pipeline must fall back to the per-section count it
+    can still support rather than emitting a confident zero.
+    """
+    # Drift far exceeding the 4 mm centroid gate: tracking cannot survive it.
+    phantom = make_cine_phantom(drift_mm_per_frame=(8.0, 0.0))
+    encoding, _ = _encode(phantom)
+    morphology = encoding.morphology
+
+    assert encoding.tracking.estimated_unique_count == 0
+    assert morphology.estimated_follicle_number_per_ovary is None
+    assert morphology.follicle_count_method != "estimated_per_ovary"
+    assert any(
+        "withheld" in w.lower() and ("zero" in w.lower() or "coverage" in w.lower())
+        for w in morphology.warnings
+    ), morphology.warnings
+
+
+def test_moderate_drift_degrades_the_estimate_rather_than_breaking_it():
+    """Drift within the centroid gate must still track; beyond it, degrade."""
+    ok, _ = _encode(make_cine_phantom(drift_mm_per_frame=(2.0, 0.0)))
+    assert ok.morphology.estimated_follicle_number_per_ovary == 4
+    assert ok.tracking.confidence > 0.9
+
+
 def test_tracking_warns_that_the_count_is_an_estimate():
     """The estimate must never travel without the caveat that it is one."""
     encoding, _ = _encode(make_cine_phantom())

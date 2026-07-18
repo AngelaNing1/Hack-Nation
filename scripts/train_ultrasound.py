@@ -112,7 +112,9 @@ def run_single_frame_cohort(
             semi_axes_mm=tuple(frame_cfg.get("semi_axes_mm", (15.0, 12.0))),  # type: ignore[arg-type]
             seed=seed * 100 + index,
         )
-        loaded = _load(phantom.frame, mode="single_frame", spacing=spacing, index=index, prefix="FRAME")
+        loaded = _load(
+            phantom.frame, mode="single_frame", spacing=spacing, index=index, prefix="FRAME"
+        )
         encoding = encoder.encode(loaded.array, loaded.metadata, acquisition_mode="single_frame")
         morphology = encoding.morphology
 
@@ -139,7 +141,9 @@ def run_single_frame_cohort(
         )
         tokens.append(encoding.token.model_dump(mode="json"))
 
-    metrics: dict[str, float] = {f"frame_{k}": float(np.mean([s[k] for s in per_study])) for k in per_study[0]}
+    metrics: dict[str, float] = {
+        f"frame_{k}": float(np.mean([s[k] for s in per_study])) for k in per_study[0]
+    }
     metrics.update(per_section_count_mae(pred_counts, true_counts))
     if area_errors:
         metrics["ovary_area_mape"] = float(np.mean(area_errors))
@@ -185,7 +189,9 @@ def run_cine_cohort(
             unusable_frames=unusable,
             seed=seed * 100 + index,
         )
-        loaded = _load(phantom.frames, mode="cine_loop", spacing=spacing, index=index, prefix="CINE")
+        loaded = _load(
+            phantom.frames, mode="cine_loop", spacing=spacing, index=index, prefix="CINE"
+        )
         encoding = encoder.encode(loaded.array, loaded.metadata, acquisition_mode="cine_loop")
         morphology = encoding.morphology
         tracking = encoding.tracking
@@ -265,7 +271,9 @@ def run_volume_cohort(
             spacing=spacing,  # type: ignore[arg-type]
             seed=seed * 100 + index,
         )
-        loaded = _load(phantom.volume, mode="volume_3d", spacing=phantom.spacing, index=index, prefix="VOL")
+        loaded = _load(
+            phantom.volume, mode="volume_3d", spacing=phantom.spacing, index=index, prefix="VOL"
+        )
         encoding = encoder.encode(loaded.array, loaded.metadata, acquisition_mode="volume_3d")
         morphology = encoding.morphology
 
@@ -287,9 +295,13 @@ def run_volume_cohort(
             )
         tokens.append(encoding.token.model_dump(mode="json"))
 
-    metrics: dict[str, float] = {f"volume_{k}": float(np.mean([s[k] for s in per_study])) for k in per_study[0]}
+    metrics: dict[str, float] = {
+        f"volume_{k}": float(np.mean([s[k] for s in per_study])) for k in per_study[0]
+    }
     errors = [
-        abs(float(p) - float(t)) for p, t in zip(pred_counts, true_counts, strict=True) if p is not None
+        abs(float(p) - float(t))
+        for p, t in zip(pred_counts, true_counts, strict=True)
+        if p is not None
     ]
     metrics["per_ovary_count_mae"] = float(np.mean(errors)) if errors else float("nan")
     metrics["per_ovary_count_exact_match"] = (
@@ -327,22 +339,52 @@ def run_quality_gate_check(encoder: UltrasoundEncoder, *, seed: int) -> dict[str
 
     def _assess(image, mode, spacing, prefix, index, measurable):
         loaded = _load(image, mode=mode, spacing=spacing, index=index, prefix=prefix)
-        assessments.append(encoder.encode(loaded.array, loaded.metadata, acquisition_mode=mode).quality)
+        assessments.append(
+            encoder.encode(loaded.array, loaded.metadata, acquisition_mode=mode).quality
+        )
         truly_measurable.append(measurable)
 
     spacing_2d = (0.35, 0.35, 0.35)
     for index in range(3):
-        _assess(make_phantom_2d(seed=seed * 50 + index).frame, "single_frame", spacing_2d, "GOODF", index, True)
+        _assess(
+            make_phantom_2d(seed=seed * 50 + index).frame,
+            "single_frame",
+            spacing_2d,
+            "GOODF",
+            index,
+            True,
+        )
     for index in range(2):
-        _assess(make_cine_phantom(seed=seed * 50 + index).frames, "cine_loop", spacing_2d, "GOODC", index, True)
+        _assess(
+            make_cine_phantom(seed=seed * 50 + index).frames,
+            "cine_loop",
+            spacing_2d,
+            "GOODC",
+            index,
+            True,
+        )
     for index in range(2):
         phantom = make_phantom(seed=seed * 50 + index)
         _assess(phantom.volume, "volume_3d", phantom.spacing, "GOODV", index, True)
 
     # Structureless noise: no ovary at all, in either dimensionality.
     for index in range(2):
-        _assess(make_poor_quality_frame(seed=seed * 50 + 90 + index), "single_frame", spacing_2d, "NOISEF", index, False)
-        _assess(make_poor_quality_volume(seed=seed * 50 + 90 + index), "volume_3d", (1.0, 0.6, 0.6), "NOISEV", index, False)
+        _assess(
+            make_poor_quality_frame(seed=seed * 50 + 90 + index),
+            "single_frame",
+            spacing_2d,
+            "NOISEF",
+            index,
+            False,
+        )
+        _assess(
+            make_poor_quality_volume(seed=seed * 50 + 90 + index),
+            "volume_3d",
+            (1.0, 0.6, 0.6),
+            "NOISEV",
+            index,
+            False,
+        )
 
     # Perfectly good images whose spacing is unknown: no physical measurement.
     _assess(make_phantom_2d(seed=seed * 50 + 99).frame, "single_frame", None, "NOSPACEF", 0, False)
@@ -422,9 +464,7 @@ def main(argv: list[str] | None = None) -> int:
         for mode in args.modes:
             if mode not in runners:
                 raise SystemExit(f"Unknown mode '{mode}'; expected one of {sorted(runners)}.")
-            result = runners[mode](
-                encoder, n_studies=args.n_studies, seed=seed, settings=settings
-            )
+            result = runners[mode](encoder, n_studies=args.n_studies, seed=seed, settings=settings)
             combined.update(result["metrics"])
             all_tokens.extend(result["tokens"])
             n_test += int(result["n"])

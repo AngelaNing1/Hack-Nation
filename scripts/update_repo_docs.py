@@ -127,7 +127,7 @@ def render_implementation_status() -> str:
         (
             "8",
             "Ultrasound pipeline",
-            ["models/ultrasound/morphology.py"],
+            ["models/ultrasound/morphology_2d.py"],
             "Segmentation/counting metrics on labelled data",
         ),
         (

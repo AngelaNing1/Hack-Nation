@@ -211,7 +211,7 @@ artifacts/    splits, metrics, checkpoints, figures, model cards, manifests
 | 5 | Subtype + stability | Implemented | Stability metrics only; no external validation |
 | 6 | Speech pipeline | Implemented | Synthetic scripted corpus only |
 | 7 | Document pipeline | Implemented | Synthetic report corpus only |
-| 8 | Ultrasound pipeline | **Not implemented** | Segmentation/counting metrics on labelled data |
+| 8 | Ultrasound pipeline | Implemented | Segmentation/counting metrics on labelled data |
 | 9 | Dynamic hormonal state | Implemented | Grouped participant-level held-out evaluation |
 | — | Cross-modal fusion | **Not implemented** | Requires genuinely matched multimodal patients |
 <!-- AUTO-GENERATED: IMPLEMENTATION-STATUS END -->

@@ -28,7 +28,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]
@@ -56,7 +58,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]
@@ -84,7 +88,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]
@@ -112,7 +118,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]
@@ -140,7 +148,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]
@@ -168,7 +178,9 @@
       ],
       "valid": true,
       "errors": [],
-      "warnings": [],
+      "warnings": [
+        "Acquisition mode: volume_3d."
+      ],
       "transforms_applied": [
         "intensity_normalize:percentile"
       ]

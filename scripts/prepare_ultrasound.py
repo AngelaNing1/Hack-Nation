@@ -53,12 +53,15 @@ def synthetic_studies(config: dict[str, Any]) -> LoadedStudies:
     seed = int(settings.get("seed", 0))
     out: LoadedStudies = []
     for index in range(n):
+        # The volumetric phantom is the OPTIONAL enhanced mode; its settings
+        # live under `volume:` now that 2D is the primary pathway.
+        volume_cfg = settings.get("volume", settings) or {}
         phantom = make_phantom(
-            shape=tuple(settings.get("shape", (48, 64, 64))),  # type: ignore[arg-type]
-            spacing=tuple(settings.get("spacing_mm", (1.0, 0.6, 0.6))),  # type: ignore[arg-type]
-            semi_axes_mm=tuple(settings.get("semi_axes_mm", (11.0, 15.0, 12.0))),  # type: ignore[arg-type]
+            shape=tuple(volume_cfg.get("shape", (48, 64, 64))),  # type: ignore[arg-type]
+            spacing=tuple(volume_cfg.get("spacing_mm", (1.0, 0.6, 0.6))),  # type: ignore[arg-type]
+            semi_axes_mm=tuple(volume_cfg.get("semi_axes_mm", (11.0, 15.0, 12.0))),  # type: ignore[arg-type]
             follicle_diameters_mm=tuple(
-                settings.get("follicle_diameters_mm", (4.0, 5.0, 6.0, 7.0, 8.0, 9.0))
+                volume_cfg.get("follicle_diameters_mm", (4.0, 5.0, 6.0, 7.0, 8.0, 9.0))
             ),
             seed=seed + index,
         )
@@ -70,6 +73,7 @@ def synthetic_studies(config: dict[str, Any]) -> LoadedStudies:
             laterality="left" if index % 2 == 0 else "right",
             route="transvaginal",
             source_dataset="synthetic_phantom",
+            acquisition_mode="volume_3d",
         )
         out.append((phantom.volume, metadata, phantom))
     return out

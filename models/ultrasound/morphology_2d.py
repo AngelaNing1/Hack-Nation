@@ -51,7 +51,18 @@ from models.ultrasound.follicle_instances import (
 )
 from schemas.imaging import ImageQualityAssessment, UltrasoundStudyMetadata
 
+#: Below this tracking coverage the unique-follicle estimate is withheld: too few
+#: frames contributed usable masks for cross-frame following to mean anything.
+MIN_COVERAGE_FOR_ESTIMATE = 0.30
+
+#: A count of ZERO is only reportable when tracking was confident enough that an
+#: empty result is informative. Below this, zero tracks means "we could not
+#: follow anything", not "there are no follicles", and the estimate is withheld.
+MIN_CONFIDENCE_FOR_ZERO_ESTIMATE = 0.40
+
 __all__ = [
+    "MIN_CONFIDENCE_FOR_ZERO_ESTIMATE",
+    "MIN_COVERAGE_FOR_ESTIMATE",
     "CineMorphology2D",
     "FrameMorphology2D",
     "compute_cine_morphology",
@@ -404,6 +415,27 @@ def compute_cine_morphology(
             "Follicle counting was not feasible on any frame; the unique-count estimate is "
             "withheld rather than reported from unusable masks."
         )
+
+    # A reported count of zero is a strong claim — "this ovary has no follicles".
+    # When tracking has broken down, zero surviving tracks means "we could not
+    # follow anything", which is a completely different statement and must not be
+    # emitted as a measurement. The two are only distinguishable when coverage and
+    # tracking confidence are high enough for an empty result to be informative.
+    if estimated is not None and tracking.tracking_coverage < MIN_COVERAGE_FOR_ESTIMATE:
+        warnings.append(
+            f"Tracking coverage {tracking.tracking_coverage:.0%} is below the "
+            f"{MIN_COVERAGE_FOR_ESTIMATE:.0%} floor; the unique-follicle estimate is withheld "
+            "because too few frames contributed usable masks to follow anything across them."
+        )
+        estimated = None
+    elif estimated == 0 and tracking.confidence < MIN_CONFIDENCE_FOR_ZERO_ESTIMATE:
+        warnings.append(
+            f"No follicle track survived, but tracking confidence is only "
+            f"{tracking.confidence:.2f}. A count of zero cannot be distinguished from a tracking "
+            "failure at this confidence, so the unique-follicle estimate is withheld rather than "
+            "reported as zero."
+        )
+        estimated = None
 
     large = sorted({d for f in usable for d in f.large_structure_diameters_mm})
     if large:
