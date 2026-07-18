@@ -100,7 +100,7 @@ class DailyAggregate:
 
 
 def _finite(
-    timestamps: Sequence[datetime], values: Sequence[float]
+    timestamps: Sequence[datetime], values: Sequence[float] | np.ndarray
 ) -> tuple[list[datetime], np.ndarray]:
     array = np.asarray(values, dtype=float)
     if len(timestamps) != array.size:
@@ -111,7 +111,7 @@ def _finite(
 
 def day_night_difference(
     timestamps: Sequence[datetime],
-    values: Sequence[float],
+    values: Sequence[float] | np.ndarray,
     window: tuple[time, time] = DAY_WINDOW,
 ) -> float | None:
     """Mean over the daytime window minus mean over the night window.
@@ -130,7 +130,9 @@ def day_night_difference(
 
 
 def time_in_range(
-    values: Sequence[float], target: tuple[float, float] | None = None, code: str | None = None
+    values: Sequence[float] | np.ndarray,
+    target: tuple[float, float] | None = None,
+    code: str | None = None,
 ) -> float | None:
     """Fraction of observed readings inside the target range.
 
@@ -162,7 +164,7 @@ def time_in_range(
 
 
 def rate_of_change_per_hour(
-    timestamps: Sequence[datetime], values: Sequence[float]
+    timestamps: Sequence[datetime], values: Sequence[float] | np.ndarray
 ) -> float | None:
     """Median absolute first difference per hour, using real timestamp gaps."""
     stamps, array = _finite(timestamps, values)

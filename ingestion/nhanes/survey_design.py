@@ -17,6 +17,7 @@ would invite exactly the population inference the dataset registry prohibits.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from typing import overload
 
 import numpy as np
 
@@ -38,7 +39,9 @@ INTERVIEW_WEIGHT_COLUMN = "WTINT2YR"
 FASTING_WEIGHT_COLUMN = "WTSAF2YR"
 
 
-def _clean(values: Sequence[float], weights: Sequence[float]) -> tuple[np.ndarray, np.ndarray]:
+def _clean(
+    values: Sequence[float] | np.ndarray, weights: Sequence[float] | np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
     """Drop non-finite values and non-positive weights, keeping the pair aligned."""
     v = np.asarray(values, dtype=float)
     w = np.asarray(weights, dtype=float)
@@ -50,7 +53,9 @@ def _clean(values: Sequence[float], weights: Sequence[float]) -> tuple[np.ndarra
     return v[keep], w[keep]
 
 
-def weighted_mean(values: Sequence[float], weights: Sequence[float]) -> float:
+def weighted_mean(
+    values: Sequence[float] | np.ndarray, weights: Sequence[float] | np.ndarray
+) -> float:
     """Survey-weighted mean.
 
     Args:
@@ -64,7 +69,9 @@ def weighted_mean(values: Sequence[float], weights: Sequence[float]) -> float:
     return float(np.sum(v * w) / np.sum(w))
 
 
-def weighted_std(values: Sequence[float], weights: Sequence[float]) -> float:
+def weighted_std(
+    values: Sequence[float] | np.ndarray, weights: Sequence[float] | np.ndarray
+) -> float:
     """Survey-weighted standard deviation about the weighted mean.
 
     Uses the reliability-weight correction, which is the right one when weights
@@ -125,8 +132,8 @@ def weighted_quantile(
 
 
 def weighted_reference_range(
-    values: Sequence[float],
-    weights: Sequence[float],
+    values: Sequence[float] | np.ndarray,
+    weights: Sequence[float] | np.ndarray,
     lower: float = 0.025,
     upper: float = 0.975,
 ) -> dict[str, float]:

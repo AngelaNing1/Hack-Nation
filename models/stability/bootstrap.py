@@ -117,7 +117,7 @@ def bootstrap_clustering(
     warnings: list[str] = []
 
     for b in range(n_bootstrap):
-        draw = rng.choice(n, size=n, replace=True)
+        draw = np.asarray(rng.choice(n, size=n, replace=True))
         idx = sorted({int(i) for i in draw})
         if len(idx) <= k:
             continue

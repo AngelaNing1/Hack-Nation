@@ -95,9 +95,9 @@ def fit_feature_spec(
     scales: dict[str, float] = {}
     for channel in resolved:
         observed = [
-            float(day.values[channel])
+            float(raw)
             for day in days
-            if day.is_observed.get(channel) and day.values.get(channel) is not None
+            if day.is_observed.get(channel) and (raw := day.values.get(channel)) is not None
         ]
         if observed:
             array = np.asarray(observed, dtype=float)

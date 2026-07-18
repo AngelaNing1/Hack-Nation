@@ -257,7 +257,7 @@ class PdfPlumberParser(DocumentParser):
     ) -> ParsedDocument:  # pragma: no cover - requires optional dependency
         """Parse a PDF path into pages with text and tables."""
         try:
-            import pdfplumber  # type: ignore[import-not-found]
+            import pdfplumber
         except ImportError as exc:
             raise ImportError(
                 "PdfPlumberParser requires pdfplumber, which is not installed. Install it "

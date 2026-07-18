@@ -82,7 +82,7 @@ def word_error_rate(reference: str, hypothesis: str, *, use_jiwer: bool = True) 
     """WER = edit distance / reference length. Empty reference yields 0.0 or 1.0."""
     if use_jiwer:
         try:  # pragma: no cover - optional dependency
-            import jiwer  # type: ignore[import-not-found]
+            import jiwer
 
             return float(jiwer.wer(reference, hypothesis))
         except ImportError:

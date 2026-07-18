@@ -86,8 +86,10 @@ def ball(radius: int, ndim: int) -> np.ndarray:
     """Binary structuring element approximating a disc/sphere of ``radius``."""
     radius = max(int(radius), 1)
     axes = np.ogrid[tuple(slice(-radius, radius + 1) for _ in range(ndim))]
-    squared = sum(a.astype(float) ** 2 for a in axes)
-    return squared <= radius**2 + 1e-9
+    squared = np.zeros((1,) * ndim, dtype=float)
+    for axis in axes:
+        squared = squared + np.asarray(axis, dtype=float) ** 2
+    return np.asarray(squared <= radius**2 + 1e-9)
 
 
 def otsu_threshold(array: np.ndarray, bins: int = 128) -> float:

@@ -277,3 +277,21 @@ def test_all_heads_are_fitted_by_the_state_model(fitted):
     assert model.heads.cycle.weights is not None
     assert model.heads.symptom.symptoms
     assert model.heads.masked.coefficients is not None
+
+
+def test_interval_coverage_accepts_every_scalar_sigma_form():
+    """A 0-d array sigma must broadcast, not be mistaken for a per-point sequence.
+
+    ``interval_coverage`` branched on ``np.isscalar``, which is False for a 0-d
+    numpy array. Such a sigma therefore took the sequence path, stayed 0-d, and
+    crashed on ``s[ok]`` with an IndexError — so a caller that computed a single
+    pooled sigma with numpy got a crash instead of a coverage number.
+    """
+    from evaluation.temporal import interval_coverage
+
+    predicted = [1.0, 2.0, 3.0, 4.0]
+    truth = [1.1, 2.2, 3.3, 9.0]
+    expected = interval_coverage(predicted, truth, 1.0)["coverage"]
+
+    for sigma in (np.float64(1.0), np.array(1.0), np.asarray([1.0, 1.0, 1.0, 1.0])):
+        assert interval_coverage(predicted, truth, sigma)["coverage"] == pytest.approx(expected)

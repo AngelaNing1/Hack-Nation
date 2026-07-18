@@ -74,8 +74,8 @@ def temperature_scale(probabilities: np.ndarray, temperature: float) -> np.ndarr
 
 
 def expected_calibration_error(
-    confidences: Sequence[float],
-    accuracies: Sequence[float],
+    confidences: Sequence[float] | np.ndarray,
+    accuracies: Sequence[float] | np.ndarray,
     n_bins: int = 10,
 ) -> float:
     """Binned |mean confidence − mean empirical agreement|, weighted by bin size.

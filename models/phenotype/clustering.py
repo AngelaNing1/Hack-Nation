@@ -256,8 +256,8 @@ def _bootstrap_stability(
     rng = np.random.default_rng(seed)
     runs: list[tuple[np.ndarray, list[int]]] = []
     for b in range(n_bootstrap):
-        idx = rng.choice(n, size=n, replace=True)
-        unique_idx = sorted(set(int(i) for i in idx))
+        idx = np.asarray(rng.choice(n, size=n, replace=True))
+        unique_idx = sorted({int(i) for i in idx})
         if len(unique_idx) <= k:
             continue
         sub = X[unique_idx]

@@ -247,11 +247,11 @@ class WhisperTranscriptionAdapter(TranscriptionAdapter):
             return self._model
         try:
             if self.implementation == "faster_whisper":
-                from faster_whisper import WhisperModel  # type: ignore[import-not-found]
+                from faster_whisper import WhisperModel
 
                 self._model = WhisperModel(self.model_size, device=self.device)
             else:
-                import whisper  # type: ignore[import-not-found]
+                import whisper
 
                 self._model = whisper.load_model(self.model_size, device=self.device)
         except ImportError as exc:  # pragma: no cover - depends on optional extra

@@ -54,7 +54,7 @@ class MLPStaticModel(BasePrismModel):
         self.threshold = threshold
         self.estimator = MLPClassifier(
             hidden_layer_sizes=tuple(hidden_layer_sizes),
-            activation=activation,  # type: ignore[arg-type]
+            activation=activation,
             alpha=alpha,
             learning_rate_init=learning_rate_init,
             max_iter=max_iter,

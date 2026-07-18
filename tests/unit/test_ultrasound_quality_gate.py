@@ -108,3 +108,25 @@ def test_partial_ovary_blocks_volume_but_flags_it():
     assert any(
         "border" in w.lower() or "truncat" in w.lower() for w in encoding.morphology.warnings
     )
+
+
+def test_malformed_spacing_is_rejected_rather_than_silently_truncated():
+    """A spacing that is not three values must raise, not become a 2-tuple.
+
+    ``preprocess_volume`` used to build ``original_spacing_mm`` with a generic
+    ``tuple(float(s) for s in spacing_mm)``, so a 2-entry spacing sailed through
+    and was stored as the acquired spacing of a 3D volume. Every downstream
+    millimetre figure — follicle diameters, ovarian volume — is computed from
+    that field, so the wrong-rank spacing would have produced measurements that
+    look real and are not. Failing loudly is the only safe behaviour.
+    """
+    import pytest
+
+    from ingestion.ultrasound.preprocessing import preprocess_volume
+
+    volume = np.zeros((4, 8, 8), dtype=float)
+    with pytest.raises(ValueError, match="three entries"):
+        preprocess_volume(volume, spacing_mm=(0.5, 0.5))  # type: ignore[arg-type]
+
+    ok = preprocess_volume(volume, spacing_mm=(0.5, 0.4, 0.4))
+    assert ok.measurement_spacing_mm == (0.5, 0.4, 0.4)

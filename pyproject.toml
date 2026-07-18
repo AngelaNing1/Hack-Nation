@@ -66,7 +66,13 @@ ignore = ["N803", "N806", "B008"]
 # which is what we actually want — the runtime floor is still enforced by
 # requires-python and by the 3.11 leg of the CI test matrix.
 ignore_missing_imports = true
-warn_unused_ignores = false
+# On: a stale ``type: ignore`` is a claim about the code that is no longer true,
+# and the run above is only trustworthy if those are pruned as they go dead.
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+strict_equality = true
+# Deliberately off: turning this on is a separate, much larger project.
 disallow_untyped_defs = false
 plugins = []
 

@@ -197,6 +197,12 @@ def crop_or_pad(
     return array
 
 
+def _as_triple(spacing: tuple[float, float, float]) -> tuple[float, float, float]:
+    """Normalise a 3-spacing to plain floats without losing its fixed length."""
+    z, y, x = spacing
+    return (float(z), float(y), float(x))
+
+
 def resample_to_spacing(
     volume: np.ndarray,
     source_spacing: tuple[float, float, float] | None,
@@ -227,15 +233,15 @@ def resample_to_spacing(
         float(s) / float(t) for s, t in zip(source_spacing, target_spacing, strict=True)
     )
     if all(abs(f - 1.0) < 1e-6 for f in zoom_factors):
-        return array, tuple(float(t) for t in target_spacing)  # type: ignore[return-value]
+        return array, _as_triple(target_spacing)
     try:
         from scipy.ndimage import zoom as ndzoom  # noqa: PLC0415
 
         resampled = ndzoom(array, zoom_factors, order=order)
     except ImportError:  # pragma: no cover - scipy is a hard dependency
         resampled = array
-        return resampled, tuple(float(s) for s in source_spacing)  # type: ignore[return-value]
-    return resampled, tuple(float(t) for t in target_spacing)  # type: ignore[return-value]
+        return resampled, _as_triple(source_spacing)
+    return resampled, _as_triple(target_spacing)
 
 
 def preprocess_volume(
@@ -271,7 +277,12 @@ def preprocess_volume(
 
     applied: list[str] = []
     warnings: list[str] = []
-    original_spacing = tuple(float(s) for s in spacing_mm) if spacing_mm is not None else None
+    original_spacing: tuple[float, float, float] | None = None
+    if spacing_mm is not None:
+        if len(spacing_mm) != 3:
+            raise ValueError(f"spacing_mm must have three entries, got {len(spacing_mm)}.")
+        sz, sy, sx = spacing_mm
+        original_spacing = (float(sz), float(sy), float(sx))
     array = np.asarray(volume, dtype=float)
 
     array = normalize_intensity(array, mode=normalization)
@@ -296,8 +307,8 @@ def preprocess_volume(
 
     return PreprocessResult(
         volume=array,
-        spacing_mm=current_spacing,  # type: ignore[arg-type]
-        original_spacing_mm=original_spacing,  # type: ignore[arg-type]
+        spacing_mm=current_spacing,
+        original_spacing_mm=original_spacing,
         applied=applied,
         warnings=warnings,
     )

@@ -806,7 +806,7 @@ class RuleBasedExtractor(ExtractionAdapter):
         for action, cues in self.medication_actions.items():
             hit = _cue_hit(tokens, lo, hi, cues)
             if hit is not None and (best is None or hit[0] > best[0]):
-                best = (hit[0], action)  # type: ignore[assignment]
+                best = (hit[0], action)
         return best[1] if best else None
 
     # -- Numeric cycle facts ------------------------------------------------

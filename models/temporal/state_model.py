@@ -82,9 +82,10 @@ def grouped_participant_split(
     wildly optimistic about a new person. Every split in this module is therefore
     grouped.
 
-    A shared implementation in ``training.splits`` is preferred when present;
-    this local version is the fallback so the temporal model never depends on
-    module load order.
+    This is the implementation. ``training.splits`` exposes only *manifest*
+    builders (k-fold, LOPO, holdout) and no plain grouped train/test helper, so
+    there is nothing to delegate to; an earlier version tried to import one and
+    silently fell through to this code on every call.
 
     Args:
         groups: Participant id per window.
@@ -94,13 +95,6 @@ def grouped_participant_split(
     Returns:
         ``(train_indices, test_indices)``.
     """
-    try:
-        from training.splits import grouped_train_test_split  # noqa: PLC0415
-
-        return grouped_train_test_split(groups, test_fraction=test_fraction, seed=seed)
-    except (ImportError, AttributeError):
-        pass
-
     unique = sorted(set(groups))
     rng = np.random.default_rng(seed)
     shuffled = list(unique)
@@ -119,8 +113,9 @@ def _hormone_targets(days: list[ParticipantDay]) -> tuple[np.ndarray, np.ndarray
     mask = np.zeros_like(values, dtype=bool)
     for row, day in enumerate(days):
         for col, name in enumerate(HORMONE_TARGETS):
-            if day.is_observed.get(name) and day.values.get(name) is not None:
-                values[row, col] = float(day.values[name])
+            raw = day.values.get(name)
+            if day.is_observed.get(name) and raw is not None:
+                values[row, col] = float(raw)
                 mask[row, col] = True
     return values, mask
 
@@ -309,10 +304,11 @@ class TemporalStateModel:
         mask = np.zeros_like(values, dtype=bool)
         for row, day in enumerate(days):
             for col, channel in enumerate(channels):
-                if day.is_observed.get(channel) and day.values.get(channel) is not None:
+                raw = day.values.get(channel)
+                if day.is_observed.get(channel) and raw is not None:
                     mean = self.spec.channel_means.get(channel, 0.0)
                     scale = self.spec.channel_scales.get(channel, 1.0)
-                    values[row, col] = (float(day.values[channel]) - mean) / scale
+                    values[row, col] = (float(raw) - mean) / scale
                     mask[row, col] = True
         return values, mask
 

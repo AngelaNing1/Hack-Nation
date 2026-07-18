@@ -93,7 +93,10 @@ def _max_extent_mm(coords: np.ndarray, spacing: tuple[float, float, float]) -> f
 
 def separate_touching(
     mask: np.ndarray,
-    spacing: tuple[float, float, float] | None,
+    # 2D and 3D masks both come through here (the cine tracker passes an
+    # in-plane ``(row_mm, col_mm)``), so spacing is one value per mask axis
+    # rather than always three.
+    spacing: tuple[float, ...] | None,
     *,
     min_distance_mm: float = 1.2,
 ) -> tuple[np.ndarray, int]:
