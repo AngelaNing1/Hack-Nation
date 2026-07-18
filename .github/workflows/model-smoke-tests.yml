@@ -23,41 +23,48 @@ jobs:
   smoke:
     name: Tiny synthetic training runs
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/setup-python@v5
         with:
-          enable-cache: true
-      - run: uv sync --all-extras
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install --upgrade pip
+      - run: pip install -e ".[dev]"
 
       - name: Smoke test suite
-        run: uv run pytest tests/smoke -v -m smoke
+        run: pytest tests/smoke -v -m smoke
 
+      # Every command below is also asserted by tests/integration/test_cli_contract.py,
+      # which parses the docs and checks the flags exist. If one drifts, that test
+      # fails first with a clearer message than a workflow log.
       - name: Static baseline trains end to end
-        run: uv run python scripts/train_static_baselines.py --config configs/experiments/exp_static_baselines.yaml
+        run: python scripts/train_static_baselines.py --config configs/experiments/exp_static_baselines.yaml
 
       - name: Phenotype domain scores are produced
-        run: uv run python scripts/train_tabular_autoencoder.py --config configs/experiments/exp_phenotype_domains.yaml
+        run: python scripts/train_tabular_autoencoder.py --config configs/experiments/exp_phenotype_domains.yaml
 
       - name: Clustering and stability output
         run: |
-          uv run python scripts/discover_phenotypes.py --config configs/experiments/exp_subtype_stability.yaml
-          uv run python scripts/run_stability_analysis.py --config configs/experiments/exp_subtype_stability.yaml
+          python scripts/discover_phenotypes.py --config configs/experiments/exp_subtype_stability.yaml
+          python scripts/run_stability_analysis.py --config configs/experiments/exp_subtype_stability.yaml
 
       - name: Speech and document extraction
         run: |
-          uv run python scripts/evaluate_speech_pipeline.py --config configs/experiments/exp_speech_extraction.yaml
-          uv run python scripts/evaluate_document_pipeline.py --config configs/experiments/exp_document_extraction.yaml
+          python scripts/evaluate_speech_pipeline.py --config configs/experiments/exp_speech_extraction.yaml
+          python scripts/evaluate_document_pipeline.py --config configs/experiments/exp_document_extraction.yaml
 
-      - name: Ultrasound forward pass on phantoms
-        run: uv run python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml
+      - name: Ultrasound pipeline on phantoms
+        run: |
+          python scripts/prepare_ultrasound.py --config configs/data/ultrasound.yaml
+          python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml
 
       - name: Temporal model on synthetic cycles
-        run: uv run python scripts/train_temporal.py --config configs/experiments/exp_dynamic_state.yaml
+        run: python scripts/train_temporal.py --config configs/experiments/exp_dynamic_state.yaml
 
       - name: All five tokens serialize under the shared contract
-        run: uv run pytest tests/integration -k token -v
+        run: pytest tests/integration -k token -v
 
       - name: Upload smoke artifacts
         if: always()
@@ -66,3 +73,4 @@ jobs:
           name: smoke-artifacts
           path: artifacts/
           retention-days: 7
+          if-no-files-found: ignore
