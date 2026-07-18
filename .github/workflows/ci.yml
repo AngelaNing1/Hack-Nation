@@ -1,0 +1,100 @@
+name: CI
+
+# Runs entirely on committed synthetic fixtures. No clinical dataset is ever
+# available to CI, by design — if a test needs private data, it is the wrong test.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHONHASHSEED: "0"
+
+jobs:
+  quality:
+    name: Format, lint, types
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check
+        run: uv run mypy schemas ingestion models training evaluation
+
+  test:
+    name: Tests (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - name: Install
+        run: uv sync --all-extras
+      - name: Unit and contract tests
+        run: uv run pytest tests/unit tests/contract --cov=schemas --cov=ingestion --cov=models --cov-report=term-missing
+      - name: Integration tests
+        run: uv run pytest tests/integration
+
+  minimal-deps:
+    name: Tests without optional extras
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      # Every module must degrade to a documented fallback when torch, xgboost,
+      # pydicom, whisper and pdfplumber are absent. This job is what keeps that true.
+      - name: Install core only
+        run: uv sync --extra dev
+      - name: Run suite on fallbacks
+        run: uv run pytest tests/unit tests/contract tests/smoke
+
+  registry:
+    name: Registry validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --extra dev
+      - run: uv run python scripts/validate_registry.py
+
+  no-clinical-data:
+    name: No clinical data committed
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject data files that should never be in git
+        run: |
+          set -euo pipefail
+          # Fixtures are synthetic and tiny; anything large or in a raw data path
+          # is treated as an accident until proven otherwise.
+          if git ls-files | grep -E '^(data|raw|private)/' ; then
+            echo "::error::Files committed under a raw data path."
+            exit 1
+          fi
+          if git ls-files -z | xargs -0 -I{} find {} -size +2M 2>/dev/null | grep . ; then
+            echo "::error::File larger than 2MB committed — clinical data must never be in git."
+            exit 1
+          fi
+          if git ls-files | grep -iE '\.(dcm|dicom|nii|nii\.gz|wav|mp3|m4a)$' ; then
+            echo "::error::Raw imaging or audio committed."
+            exit 1
+          fi
+          echo "No clinical data detected."

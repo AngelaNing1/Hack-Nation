@@ -1,0 +1,39 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  release:
+    name: Build and publish release notes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v3
+      - run: uv sync --all-extras
+
+      - name: Full CI gate before release
+        run: |
+          uv run ruff check .
+          uv run pytest tests/unit tests/contract tests/integration
+          uv run python scripts/validate_registry.py
+
+      - name: Build distribution
+        run: uv build
+
+      # Release notes are generated from conventional-commit prefixes:
+      # feat: fix: docs: data: model: eval: refactor: test: chore:
+      - name: Generate release notes
+        run: uv run python scripts/generate_release_notes.py --output RELEASE_NOTES.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: RELEASE_NOTES.md
+          files: dist/*
+          draft: true

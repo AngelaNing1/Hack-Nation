@@ -1,0 +1,75 @@
+# Phenotype-domain definitions for the first PCOS adapter.
+#
+# `weight` is a documented, deliberately simple prior — not a learned parameter.
+# `direction` says which sign of the z-score raises the domain score.
+# `evidence_class` separates biochemical evidence from symptom report, so a
+# domain scored only from symptoms is labelled as such and never presented as a
+# biochemical finding.
+
+version: "1.0.0"
+
+domains:
+  reproductive:
+    label: "Reproductive / ovulatory"
+    description: "Ovulatory function and menstrual pattern."
+    min_coverage_to_report: 0.34
+    features:
+      - { code: cycle_length, weight: 1.0, direction: 1, evidence_class: report }
+      - { code: cycle_irregularity, weight: 1.5, direction: 1, evidence_class: report }
+      - { code: menstrual_frequency_per_year, weight: 1.0, direction: -1, evidence_class: report }
+      - { code: amenorrhea, weight: 1.0, direction: 1, evidence_class: report }
+      - { code: infertility_history, weight: 0.75, direction: 1, evidence_class: report }
+      - { code: luteinizing_hormone, weight: 0.75, direction: 1, evidence_class: biochemical }
+      - { code: follicle_stimulating_hormone, weight: 0.5, direction: -1, evidence_class: biochemical }
+      - { code: lh_fsh_ratio, weight: 1.0, direction: 1, evidence_class: biochemical }
+      - { code: progesterone, weight: 0.5, direction: -1, evidence_class: biochemical }
+
+  metabolic:
+    label: "Metabolic"
+    description: "Adiposity, glycemic and lipid burden."
+    min_coverage_to_report: 0.34
+    features:
+      - { code: bmi, weight: 1.0, direction: 1, evidence_class: measurement }
+      - { code: waist_circumference, weight: 0.75, direction: 1, evidence_class: measurement }
+      - { code: waist_hip_ratio, weight: 0.75, direction: 1, evidence_class: measurement }
+      - { code: fasting_glucose, weight: 1.0, direction: 1, evidence_class: biochemical }
+      - { code: fasting_insulin, weight: 1.25, direction: 1, evidence_class: biochemical }
+      - { code: homa_ir, weight: 1.25, direction: 1, evidence_class: biochemical }
+      - { code: systolic_blood_pressure, weight: 0.5, direction: 1, evidence_class: measurement }
+      - { code: diastolic_blood_pressure, weight: 0.5, direction: 1, evidence_class: measurement }
+      - { code: hdl_cholesterol, weight: 0.75, direction: -1, evidence_class: biochemical }
+      - { code: triglycerides, weight: 0.75, direction: 1, evidence_class: biochemical }
+      - { code: weight_gain, weight: 0.5, direction: 1, evidence_class: report }
+
+  androgenic:
+    label: "Androgenic"
+    description: >-
+      Androgen excess. When no androgen assay is observed the exported score is
+      qualified as androgenic-symptom evidence and must not be read as
+      biochemical hyperandrogenism.
+    min_coverage_to_report: 0.25
+    symptom_only_qualifier: "androgenic-symptom evidence"
+    features:
+      - { code: total_testosterone, weight: 1.5, direction: 1, evidence_class: biochemical }
+      - { code: free_testosterone, weight: 1.25, direction: 1, evidence_class: biochemical }
+      - { code: dheas, weight: 0.75, direction: 1, evidence_class: biochemical }
+      - { code: shbg, weight: 1.0, direction: -1, evidence_class: biochemical }
+      - { code: ferriman_gallwey_score, weight: 1.0, direction: 1, evidence_class: report }
+      - { code: hirsutism, weight: 1.0, direction: 1, evidence_class: report }
+      - { code: acne, weight: 0.5, direction: 1, evidence_class: report }
+      - { code: androgenic_alopecia, weight: 0.5, direction: 1, evidence_class: report }
+      - { code: skin_darkening, weight: 0.25, direction: 1, evidence_class: report }
+      - { code: hair_growth_face, weight: 0.5, direction: 1, evidence_class: report }
+
+  ovarian:
+    label: "Ovarian / LH-AMH"
+    description: "Follicular reserve and ovarian morphology."
+    min_coverage_to_report: 0.25
+    features:
+      - { code: anti_mullerian_hormone, weight: 1.5, direction: 1, evidence_class: biochemical }
+      - { code: luteinizing_hormone, weight: 1.0, direction: 1, evidence_class: biochemical }
+      - { code: follicle_stimulating_hormone, weight: 0.5, direction: -1, evidence_class: biochemical }
+      - { code: follicle_number_per_ovary, weight: 1.5, direction: 1, evidence_class: imaging }
+      - { code: follicle_count_left, weight: 0.75, direction: 1, evidence_class: imaging }
+      - { code: follicle_count_right, weight: 0.75, direction: 1, evidence_class: imaging }
+      - { code: ovary_volume_ml, weight: 1.0, direction: 1, evidence_class: imaging }

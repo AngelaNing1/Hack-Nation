@@ -1,0 +1,48 @@
+{
+  "patient_id": "DEMO001",
+  "modality": "ovarian_ultrasound",
+  "embedding": [
+    8.37792,
+    5.0,
+    0.59680684465834,
+    6.279930889334894,
+    5.848784533896792,
+    2.1563201497301825,
+    8.95653559686353,
+    5.0,
+    0.0,
+    0.8267373453651935,
+    0.8581729656625822,
+    0.9600304523310339
+  ],
+  "structured_features": {
+    "laterality": "left",
+    "acquisition_route": "transvaginal",
+    "measurement_feasible": true,
+    "full_ovary_visible": true,
+    "large_structure_flag": false,
+    "clinician_review_status": "model_generated",
+    "ovary_volume_ml": 8.37792,
+    "follicle_count": 5,
+    "follicle_density_per_ml": 0.59680684465834,
+    "false_follicle_voxels_outside_ovary": 0,
+    "ovary_mask_largest_component_fraction": 1.0,
+    "follicle_mean_diameter_mm": 6.279930889334894,
+    "follicle_median_diameter_mm": 5.848784533896792,
+    "follicle_max_diameter_mm": 8.95653559686353,
+    "follicle_n_2_to_9_mm": 5.0
+  },
+  "quality_score": 0.9600304523310339,
+  "confidence_score": 0.8267373453651935,
+  "observed_at": "2024-01-15",
+  "model_version": "0.1.0",
+  "source_dataset": "synthetic_phantom",
+  "provenance_ids": [
+    "DEMO001_LEFT"
+  ],
+  "missing_fields": [],
+  "warnings": [
+    "Clinician confirmation pending",
+    "Model-generated imaging measurement; not a diagnosis and not clinically validated."
+  ]
+}

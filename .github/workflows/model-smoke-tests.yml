@@ -1,0 +1,68 @@
+name: Model smoke tests
+
+# Trains deliberately tiny models on generated synthetic data to prove the
+# pipelines execute end to end.
+#
+# Smoke-test numbers are NOT scientific results and must never be quoted as
+# performance. They exist to catch a broken forward pass, not to measure one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - "models/**"
+      - "training/**"
+      - "features/**"
+      - "scripts/**"
+      - "configs/**"
+      - ".github/workflows/model-smoke-tests.yml"
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    name: Tiny synthetic training runs
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras
+
+      - name: Smoke test suite
+        run: uv run pytest tests/smoke -v -m smoke
+
+      - name: Static baseline trains end to end
+        run: uv run python scripts/train_static_baselines.py --config configs/experiments/exp_static_baselines.yaml
+
+      - name: Phenotype domain scores are produced
+        run: uv run python scripts/train_tabular_autoencoder.py --config configs/experiments/exp_phenotype_domains.yaml
+
+      - name: Clustering and stability output
+        run: |
+          uv run python scripts/discover_phenotypes.py --config configs/experiments/exp_subtype_stability.yaml
+          uv run python scripts/run_stability_analysis.py --config configs/experiments/exp_subtype_stability.yaml
+
+      - name: Speech and document extraction
+        run: |
+          uv run python scripts/evaluate_speech_pipeline.py --config configs/experiments/exp_speech_extraction.yaml
+          uv run python scripts/evaluate_document_pipeline.py --config configs/experiments/exp_document_extraction.yaml
+
+      - name: Ultrasound forward pass on phantoms
+        run: uv run python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml
+
+      - name: Temporal model on synthetic cycles
+        run: uv run python scripts/train_temporal.py --config configs/experiments/exp_dynamic_state.yaml
+
+      - name: All five tokens serialize under the shared contract
+        run: uv run pytest tests/integration -k token -v
+
+      - name: Upload smoke artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: artifacts/
+          retention-days: 7
