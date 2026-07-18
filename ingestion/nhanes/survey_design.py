@@ -79,8 +79,24 @@ def weighted_std(values: Sequence[float], weights: Sequence[float]) -> float:
     return float(np.sqrt(np.sum(w * (v - mean) ** 2) / denominator))
 
 
+@overload
 def weighted_quantile(
-    values: Sequence[float], weights: Sequence[float], q: float | Sequence[float]
+    values: Sequence[float] | np.ndarray, weights: Sequence[float] | np.ndarray, q: float
+) -> float: ...
+
+
+@overload
+def weighted_quantile(
+    values: Sequence[float] | np.ndarray,
+    weights: Sequence[float] | np.ndarray,
+    q: Sequence[float],
+) -> list[float]: ...
+
+
+def weighted_quantile(
+    values: Sequence[float] | np.ndarray,
+    weights: Sequence[float] | np.ndarray,
+    q: float | Sequence[float],
 ) -> float | list[float]:
     """Survey-weighted quantile(s) via the cumulative-weight step function.
 
@@ -100,7 +116,7 @@ def weighted_quantile(
     cumulative = (np.cumsum(w) - 0.5 * w) / np.sum(w)
 
     scalar = isinstance(q, (int, float))
-    qs = [float(q)] if scalar else [float(x) for x in q]  # type: ignore[union-attr]
+    qs = [float(q)] if isinstance(q, (int, float)) else [float(x) for x in q]
     for value in qs:
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"Quantile {value} outside [0, 1].")
@@ -120,12 +136,12 @@ def weighted_reference_range(
     interval rather than a mean +/- 2 SD interval, because hormone
     distributions are strongly right-skewed.
     """
-    low, high = weighted_quantile(values, weights, [lower, upper])  # type: ignore[misc]
+    low, high = weighted_quantile(values, weights, [lower, upper])
     median = weighted_quantile(values, weights, 0.5)
     v, w = _clean(values, weights)
     return {
         "lower": float(low),
-        "median": float(median),  # type: ignore[arg-type]
+        "median": float(median),
         "upper": float(high),
         "weighted_mean": weighted_mean(v, w),
         "weighted_std": weighted_std(v, w),

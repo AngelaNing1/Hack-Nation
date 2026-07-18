@@ -45,14 +45,33 @@ Nothing else.
 1. Obtain the dataset under its own access terms — see the
    [dataset registry](datasets/index.md).
 2. Store it **outside** the repository tree.
-3. Copy `.env.example` to `.env` and set `PRISM_DATA_ROOT`.
-4. Set the dataset path in the relevant `configs/data/*.yaml`.
-5. Run the prepare script, then the training script:
+3. Tell PRISM where it is, by any one of these. Higher beats lower:
+
+   | Precedence | How | Example |
+   |:--|:--|:--|
+   | 1 | CLI flag | `--data-root /data/prism` |
+   | 2 | Environment variable | `export PRISM_DATA_ROOT=/data/prism` |
+   | 3 | Config file | `data.root` in `configs/data/*.yaml` |
+
+   Copying `.env.example` to `.env` is **not** enough on its own — nothing in
+   this repository auto-loads it. Source it explicitly:
+
+   ```bash
+   set -a; source .env; set +a
+   ```
+
+4. Run the prepare script, then the training script:
 
 ```bash
 python scripts/prepare_pcos_tabular.py --config configs/data/pcos_tabular.yaml
 python scripts/train_static_baselines.py --config configs/experiments/exp_static_baselines.yaml
 ```
+
+The prepare scripts **fail loudly** when the dataset is absent, naming the path
+they looked for and every way to change it. They never fall back to synthetic
+data: preparing data is a claim that real data exists. The *training* scripts do
+fall back to synthetic fixtures, which is what makes a fresh clone runnable, and
+they stamp that fact into every artifact they write.
 
 The adapter validates the source, records checksums, maps source columns to
 canonical variables, normalizes units, and writes a processing manifest before

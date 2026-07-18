@@ -1,7 +1,34 @@
-"""Shared config loading and representation building for the Step-5 scripts.
+"""Shared config loading, data-path resolution and representation building.
 
-Kept out of the package tree on purpose: this is orchestration glue for the two
-CLI entry points, not library code that anything else should import.
+Kept out of the package tree on purpose: this is orchestration glue for the
+``scripts/`` entry points, not library code that anything else should import.
+
+Data-path resolution
+--------------------
+:func:`resolve_data_root` and :func:`resolve_data_path` are the single place
+where a dataset location is decided. Both follow the precedence documented in
+``scripts/_cli.py``::
+
+    explicit CLI flag  >  $PRISM_DATA_ROOT  >  config file value  >  built-in default
+
+Canonical config keys
+---------------------
+``data.root``
+    Directory holding the dataset. The canonical key; prefer it everywhere.
+``data.path``
+    Optional path to a specific file, relative to ``data.root`` when relative.
+
+Deprecated config keys
+----------------------
+These are still read, for backward compatibility with configs written before
+the keys were unified. They are resolved only after the canonical keys miss,
+and new configs must not use them:
+
+- ``dataset.path``  — used by the Step-5 clustering configs. Use ``data.path``.
+- ``root``          — top-level, used by the Step-8/9 data configs. Use ``data.root``.
+
+``configs/`` has been migrated to the canonical keys; the legacy readers remain
+for user-authored configs living outside this repository.
 """
 
 from __future__ import annotations
@@ -25,16 +52,110 @@ if str(REPO_ROOT) not in sys.path:
 from models.adapters.pcos.phenotype_heads import compute_domain_scores  # noqa: E402
 from models.phenotype.clustering import ClusteringInput  # noqa: E402
 from schemas.phenotype import ClusteringBenchmark  # noqa: E402
+from scripts._cli import DATA_ROOT_ENV, env_path, resolve_output_dir, resolve_path  # noqa: E402
 
 __all__ = [
     "CohortBundle",
     "build_representations",
+    "dataset_settings",
     "load_config",
     "load_cohort",
     "resolve_artifact_dir",
+    "resolve_data_path",
+    "resolve_data_root",
     "write_benchmark_csv",
     "write_json",
 ]
+
+#: Dotted config keys read for the dataset directory, canonical first.
+DATA_ROOT_KEYS: tuple[str, ...] = ("data.root", "root")
+#: Dotted config keys read for a specific dataset file, canonical first.
+DATA_PATH_KEYS: tuple[str, ...] = ("data.path", "dataset.path")
+
+
+def _dotted(config: dict[str, Any], dotted: str) -> Any:
+    """Read ``a.b.c`` out of a nested mapping, returning None on any miss."""
+    value: Any = config
+    for part in dotted.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+        if value is None:
+            return None
+    return value
+
+
+def dataset_settings(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Merge the canonical ``data:`` block over the deprecated ``dataset:`` block.
+
+    Both spellings are accepted so that configs written before the keys were
+    unified keep working; ``data:`` wins on conflict because it is canonical.
+    """
+    config = config or {}
+    merged: dict[str, Any] = {}
+    for block in ("dataset", "data"):
+        value = config.get(block)
+        if isinstance(value, dict):
+            merged.update(value)
+    return merged
+
+
+def resolve_data_root(
+    config: dict[str, Any] | None = None,
+    data_root: str | Path | None = None,
+) -> Path | None:
+    """Resolve the dataset root directory, or None when nothing is configured.
+
+    Precedence: ``data_root`` (the CLI flag) > ``$PRISM_DATA_ROOT`` > the config
+    keys in :data:`DATA_ROOT_KEYS`. Returning None is meaningful and is not an
+    error: it means "no real dataset is configured", which is the normal state
+    of a fresh clone and is what makes the synthetic fallbacks trigger.
+    """
+    if data_root is not None:
+        return resolve_path(data_root)
+    from_env = env_path(DATA_ROOT_ENV)
+    if from_env is not None:
+        return from_env
+    for key in DATA_ROOT_KEYS:
+        value = _dotted(config or {}, key)
+        if value:
+            return resolve_path(str(value))
+    return None
+
+
+def resolve_data_path(
+    config: dict[str, Any] | None = None,
+    data_root: str | Path | None = None,
+    key: str | None = None,
+) -> Path | None:
+    """Resolve the dataset path for a config, or None when unconfigured.
+
+    Args:
+        config: The loaded config mapping.
+        data_root: Value of ``--data-root``, if the caller passed one.
+        key: A specific dotted config key to read instead of the standard list.
+
+    Returns:
+        An absolute path, or None when neither a file nor a root is configured.
+
+    A relative ``data.path`` is resolved against the resolved data root when one
+    exists, and against the repository root otherwise. That is what lets a
+    single ``--data-root`` flag relocate an entire config's worth of paths
+    without editing the config.
+    """
+    config = config or {}
+    root = resolve_data_root(config, data_root)
+
+    keys = (key,) if key else DATA_PATH_KEYS
+    for dotted in keys:
+        value = _dotted(config, dotted) if dotted else None
+        if value:
+            candidate = Path(str(value)).expanduser()
+            if candidate.is_absolute():
+                return candidate
+            return resolve_path(candidate, base=root)
+
+    return root
 
 
 def load_config(path: str | Path) -> dict[str, Any]:
@@ -45,16 +166,18 @@ def load_config(path: str | Path) -> dict[str, Any]:
     return data
 
 
-def resolve_artifact_dir(config: dict[str, Any], override: str | None = None) -> Path:
-    """Create and return the experiment's artifact directory."""
-    configured = override or config.get("output", {}).get(
-        "artifact_dir", f"artifacts/experiments/{config.get('experiment_id', 'unnamed')}"
+def resolve_artifact_dir(config: dict[str, Any], override: str | Path | None = None) -> Path:
+    """Create and return the experiment's artifact directory.
+
+    Thin wrapper over :func:`scripts._cli.resolve_output_dir` so that the Step-5
+    scripts share the one precedence rule with every other entry point. The
+    legacy ``output.artifact_dir`` key is still honoured.
+    """
+    return resolve_output_dir(
+        config,
+        override,
+        config_keys=("output.artifact_dir", "output.root"),
     )
-    path = Path(configured)
-    if not path.is_absolute():
-        path = REPO_ROOT / path
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 @dataclass
@@ -81,7 +204,7 @@ def _standardize(frame: pd.DataFrame) -> pd.DataFrame:
     return z.fillna(z.median()).fillna(0.0)
 
 
-def load_cohort(config: dict[str, Any]) -> CohortBundle:
+def load_cohort(config: dict[str, Any], data_root: str | Path | None = None) -> CohortBundle:
     """Load the real dataset if configured and present; otherwise synthesize one.
 
     Falling back to synthetic data is what lets these scripts run end to end in
@@ -89,16 +212,13 @@ def load_cohort(config: dict[str, Any]) -> CohortBundle:
     and written into the artifacts, so no synthetic run can be mistaken for a
     result on real data.
     """
-    dataset = config.get("dataset", {})
+    dataset = dataset_settings(config)
     notes: list[str] = []
-    path_value = dataset.get("path")
     features: list[str] | None = dataset.get("features")
+    candidate = resolve_data_path(config, data_root)
 
-    if path_value:
-        candidate = Path(path_value)
-        if not candidate.is_absolute():
-            candidate = REPO_ROOT / candidate
-        if candidate.exists():
+    if candidate is not None:
+        if candidate.exists() and candidate.is_file():
             frame = pd.read_csv(candidate)
             id_column = dataset.get("id_column", "patient_id")
             if id_column in frame.columns:

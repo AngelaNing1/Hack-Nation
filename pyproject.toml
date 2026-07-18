@@ -60,7 +60,11 @@ ignore = ["N803", "N806", "B008"]
 "tests/**" = ["E501"]
 
 [tool.mypy]
-python_version = "3.11"
+# Pinning 3.11 here makes numpy's bundled stubs unparseable ("Type statement is
+# only supported in Python 3.12 and greater"), which aborts the whole run before
+# any project file is checked. Left unset, mypy targets the running interpreter,
+# which is what we actually want — the runtime floor is still enforced by
+# requires-python and by the 3.11 leg of the CI test matrix.
 ignore_missing_imports = true
 warn_unused_ignores = false
 disallow_untyped_defs = false

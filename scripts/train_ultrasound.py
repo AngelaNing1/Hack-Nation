@@ -54,6 +54,12 @@ from evaluation.ultrasound import (
 from ingestion.ultrasound.loader import load_ultrasound
 from models.ultrasound.encoder import UltrasoundEncoder
 from schemas.model_output import ExperimentResult, FoldMetrics
+from scripts._cli import (
+    add_deprecated_alias,
+    add_standard_arguments,
+    make_parser,
+    resolve_output_dir,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPERIMENT = REPO_ROOT / "configs" / "experiments" / "exp_ultrasound.yaml"
@@ -399,28 +405,28 @@ def run_quality_gate_check(encoder: UltrasoundEncoder, *, seed: int) -> dict[str
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    """Entry point."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--experiment",
-        "--config",
-        dest="experiment",
-        type=Path,
-        default=DEFAULT_EXPERIMENT,
-        help="Experiment config YAML.",
-    )
-    parser.add_argument("--n-studies", type=int, default=6)
-    parser.add_argument("--output-dir", type=Path, default=None)
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(parser, config_default=DEFAULT_EXPERIMENT, quiet=False)
+    # '--experiment' was this script's original name for '--config'.
+    add_deprecated_alias(parser, "--experiment", dest="config", replacement="--config", type=Path)
+    parser.add_argument("--n-studies", type=int, default=6, help="Phantom studies to generate.")
     parser.add_argument(
         "--modes",
         nargs="+",
         default=["single_frame", "cine_loop", "volume_3d"],
+        choices=["single_frame", "cine_loop", "volume_3d"],
         help="Acquisition pathways to evaluate. 2D ones are the primary pathways.",
     )
-    args = parser.parse_args(argv)
+    return parser
 
-    experiment = load_yaml(args.experiment)
+
+def main(argv: list[str] | None = None) -> int:
+    """Entry point."""
+    args = build_parser().parse_args(argv)
+
+    experiment = load_yaml(args.config)
     data_config = load_yaml(_resolve(experiment.get("data", "configs/data/ultrasound.yaml")))
     model_config = load_yaml(
         _resolve(experiment.get("model", "configs/models/ultrasound_segmentation.yaml"))
@@ -430,10 +436,10 @@ def main(argv: list[str] | None = None) -> int:
     instance_cfg = model_config.get("follicle_instances", {}) or {}
     settings = data_config.get("synthetic_fallback", {}) or {}
     seeds = [int(s) for s in experiment.get("seeds", [0])]
-    output_dir = args.output_dir or _resolve(
-        experiment.get("output_dir", "artifacts/experiments/exp_ultrasound")
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.seed is not None:
+        seeds = [int(args.seed)]
+    experiment_id = args.experiment_id or str(experiment.get("experiment_id", "exp_ultrasound"))
+    output_dir = resolve_output_dir(experiment, args.output_dir, experiment_id=experiment_id)
 
     encoder = UltrasoundEncoder(
         segmenter_kind=str(segmenter),
@@ -486,7 +492,7 @@ def main(argv: list[str] | None = None) -> int:
     }
 
     experiment_result = ExperimentResult(
-        experiment_id=str(experiment.get("experiment_id", "exp_ultrasound")),
+        experiment_id=experiment_id,
         dataset_version=str(data_config.get("dataset_version", "unversioned")),
         git_commit="unknown",
         model="ovarian_ultrasound_encoder",

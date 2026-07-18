@@ -65,6 +65,7 @@ Attribution = Literal["patient", "family_member", "other", "unknown"]
 Temporality = Literal["current", "historical", "unknown"]
 SpeakerRole = Literal["patient", "clinician", "unknown"]
 MedicationAction = Literal["start", "stop", "continue", "change"]
+Severity = Literal["mild", "moderate", "severe"]
 
 _NUMBER_WORDS: dict[str, float] = {
     "a": 1,
@@ -157,7 +158,7 @@ class ExtractedSymptomEvent(BaseModel):
     onset: str | None = None
     duration_days: float | None = None
     frequency_per_year: float | None = None
-    severity: Literal["mild", "moderate", "severe"] | None = None
+    severity: Severity | None = None
     medication_action: MedicationAction | None = None
 
     #: Endpoints of a spoken range, when ``value`` was derived from one. Kept so
@@ -698,7 +699,8 @@ class RuleBasedExtractor(ExtractionAdapter):
 
     # -- Normalizers --------------------------------------------------------
 
-    def _severity(self, tokens: list[Token], lo: int, hi: int) -> str | None:
+    def _severity(self, tokens: list[Token], lo: int, hi: int) -> Severity | None:
+        level: Severity
         for level in ("severe", "moderate", "mild"):
             if _cue_hit(tokens, lo, hi, self.severity_cues[level]) is not None:
                 return level

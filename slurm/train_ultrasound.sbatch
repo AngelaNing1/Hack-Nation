@@ -7,10 +7,14 @@
 #SBATCH --mem=64G
 #SBATCH --gres=gpu:1
 
-# Step 8 — ultrasound, 2D-primary. The three stages are SEQUENTIAL: stage 2
-# fine-tunes stage 1's checkpoint, so they cannot be an array job.
+# Step 8 — ultrasound, 2D-primary.
 #
-# Submit a single stage with: sbatch --export=ALL,STAGE=pretrain_2d ...
+# NOTE: the three-stage training strategy in configs/models/ultrasound_segmentation.yaml
+# is a DECLARED PLAN, not an implemented one — train_ultrasound.py fits no weights
+# and has no --stage flag. This template runs what actually exists: preparation,
+# then evaluation over the acquisition pathways.
+#
+# Restrict to one pathway with: sbatch --export=ALL,MODES=cine_loop ...
 
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/prism.env"
@@ -22,22 +26,19 @@ prism_record_provenance "$OUTDIR"
 
 nvidia-smi || echo "WARNING: no GPU visible — this will fall back to CPU and be very slow."
 
-STAGES="${STAGE:-extract_slices pretrain_2d finetune_2d cine_tracking}"
-for stage in $STAGES; do
-  echo "=== stage: $stage ==="
-  if [[ "$stage" == "extract_slices" ]]; then
-    python scripts/prepare_ultrasound.py \
-      --config configs/data/ultrasound.yaml \
-      --data-root "$PRISM_DATA_ROOT" \
-      --stage extract_slices
-  else
-    python scripts/train_ultrasound.py \
-      --config configs/experiments/exp_ultrasound.yaml \
-      --data-root "$PRISM_DATA_ROOT" \
-      --output-dir "$OUTDIR" \
-      --stage "$stage"
-  fi
-done
+MODES="${MODES:-single_frame cine_loop volume_3d}"
+
+python scripts/prepare_ultrasound.py \
+  --config configs/data/ultrasound.yaml \
+  --data-root "$PRISM_DATA_ROOT" \
+  --output-dir "$OUTDIR"
+
+# shellcheck disable=SC2086 - MODES is a deliberate word-split list.
+python scripts/train_ultrasound.py \
+  --config configs/experiments/exp_ultrasound.yaml \
+  --data-root "$PRISM_DATA_ROOT" \
+  --output-dir "$OUTDIR" \
+  --modes $MODES
 
 # The gate metric that must stay at zero: it counts images accepted for
 # measurement that could not support one.

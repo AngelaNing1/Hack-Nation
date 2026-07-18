@@ -20,6 +20,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from _cli import add_deprecated_alias, add_standard_arguments, make_parser  # noqa: E402
 from _experiment_io import (  # noqa: E402
     build_representations,
     load_cohort,
@@ -34,21 +35,31 @@ from models.adapters.pcos.adapter import PcosAdapter  # noqa: E402
 from models.adapters.pcos.output_schema import NON_DIAGNOSTIC_STATEMENT  # noqa: E402
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", required=True, help="Path to the experiment YAML config.")
-    parser.add_argument("--artifact-dir", default=None, help="Override the output directory.")
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(parser, experiment_id=False, quiet=False)
+    # '--artifact-dir' was this script's original name for '--output-dir'.
+    add_deprecated_alias(
+        parser, "--artifact-dir", dest="output_dir", replacement="--output-dir", type=Path
+    )
     parser.add_argument(
         "--limit-participants",
         type=int,
         default=0,
         help="Profile only the first N participants (0 profiles all).",
     )
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     config = load_config(args.config)
-    artifact_dir = resolve_artifact_dir(config, args.artifact_dir)
-    cohort = load_cohort(config)
+    if args.seed is not None:
+        config.setdefault("clustering", {})["seeds"] = [int(args.seed)]
+    artifact_dir = resolve_artifact_dir(config, args.output_dir)
+    cohort = load_cohort(config, args.data_root)
     representations = build_representations(cohort, config)
 
     adapter = PcosAdapter(build_adapter_config(config)).fit(representations, cohort.subset_ids)

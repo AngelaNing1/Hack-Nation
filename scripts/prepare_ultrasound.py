@@ -30,6 +30,8 @@ from ingestion.ultrasound.loader import load_study
 from ingestion.ultrasound.preprocessing import assert_transforms_allowed, preprocess_volume
 from ingestion.ultrasound.validation import validate_study
 from schemas.imaging import UltrasoundStudyMetadata
+from scripts._cli import add_standard_arguments, make_parser, resolve_output_dir
+from scripts._experiment_io import resolve_data_root
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CONFIG = REPO_ROOT / "configs" / "data" / "ultrasound.yaml"
@@ -99,13 +101,23 @@ def real_studies(root: Path, config: dict[str, Any]) -> LoadedStudies:
     return out
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(
+        parser, config_default=DEFAULT_CONFIG, seed=False, experiment_id=False, quiet=False
+    )
+    parser.add_argument(
+        "--force-synthetic",
+        action="store_true",
+        help="Generate phantoms even when a real dataset is present.",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
-    parser.add_argument("--output-dir", type=Path, default=REPO_ROOT / "artifacts" / "ultrasound")
-    parser.add_argument("--force-synthetic", action="store_true")
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
 
     config = load_config(args.config)
     preprocessing = config.get("preprocessing", {}) or {}
@@ -114,8 +126,11 @@ def main(argv: list[str] | None = None) -> int:
         # Fails loudly on any count-destroying augmentation enabled in YAML.
         assert_transforms_allowed(transforms)
 
-    root = REPO_ROOT / str(config.get("root", "data/raw/ultrasound"))
-    use_synthetic = args.force_synthetic or not root.exists()
+    output_dir = resolve_output_dir(
+        config, args.output_dir, experiment_id="ultrasound", config_keys=("output.dir",)
+    )
+    root = resolve_data_root(config, args.data_root)
+    use_synthetic = args.force_synthetic or root is None or not root.exists()
     if use_synthetic:
         print(f"No dataset at {root}; generating synthetic phantoms.")
         studies = synthetic_studies(config)
@@ -159,7 +174,6 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
-    args.output_dir.mkdir(parents=True, exist_ok=True)
     manifest = {
         "config": str(args.config),
         "source": "synthetic_phantom" if use_synthetic else str(root),
@@ -168,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         "n_without_spacing": sum(1 for r in records if r["spacing_mm"] is None),
         "studies": records,
     }
-    path = args.output_dir / "prepared_manifest.json"
+    path = output_dir / "prepared_manifest.json"
     path.write_text(json.dumps(manifest, indent=2) + "\n")
     print(
         f"Prepared {manifest['n_studies']} studies "

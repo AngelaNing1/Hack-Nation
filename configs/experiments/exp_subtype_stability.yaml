@@ -5,7 +5,7 @@
 #   python scripts/run_stability_analysis.py  --config configs/experiments/exp_subtype_stability.yaml
 #
 # Defaults to synthetic data so the pipeline runs end to end on a fresh clone.
-# When `dataset.path` points at a real file the scripts use it; when it does not
+# When `data.path` points at a real file the scripts use it; when it does not
 # exist they fall back to synthetic and stamp that fact into every artifact, so a
 # synthetic run can never be mistaken for a result.
 
@@ -17,8 +17,11 @@ description: >-
   exploratory patterns within one cohort and are never validated clinical
   subtypes.
 
-dataset:
-  # Set to a real CSV to use it; the scripts fall back to synthetic if absent.
+data:
+  # Canonical data location keys. Set `path` to a real CSV to use it; the scripts
+  # fall back to synthetic when it is null or absent. Overridden by --data-root
+  # and $PRISM_DATA_ROOT.
+  root: null
   path: null
   id_column: patient_id
   label_column: pcos_binary

@@ -11,14 +11,16 @@ import json
 import pickle
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeAlias
 
 import numpy as np
 import pandas as pd
 
 from schemas.model_output import ModelCardMetadata
 
-ArrayLike = np.ndarray | pd.DataFrame
+#: Explicitly a ``TypeAlias``: without the annotation this reads as a plain
+#: module-level variable and every ``X: ArrayLike`` below is silently unchecked.
+ArrayLike: TypeAlias = np.ndarray | pd.DataFrame
 
 
 class BasePrismModel(ABC):

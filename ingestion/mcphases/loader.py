@@ -205,6 +205,91 @@ class McPhasesAdapter(BaseIngestionAdapter):
         }
 
 
+#: Filenames accepted as the stream table inside an mcPHASES root directory.
+STREAM_FILE_CANDIDATES: tuple[str, ...] = ("streams.csv", "mcphases_streams.csv", "raw_streams.csv")
+
+
+class McPhasesDataNotFoundError(FileNotFoundError):
+    """Raised when the mcPHASES dataset is absent, with actionable guidance.
+
+    mcPHASES is credentialed-access and is never committed. Callers get the
+    expected path and the environment variable to set rather than a bare
+    traceback, because "file not found" three frames deep in pandas tells a user
+    nothing about what they were supposed to have downloaded.
+    """
+
+
+def _stream_files(root: Path) -> list[Path]:
+    """Find the stream table(s) under an mcPHASES root."""
+    if root.is_file():
+        return [root]
+    found = [root / name for name in STREAM_FILE_CANDIDATES if (root / name).exists()]
+    if found:
+        return found
+    return sorted(root.glob("*.csv"))
+
+
+def load_participant_days(
+    root: str | Path,
+    *,
+    strict: bool = True,
+    use: str = "temporal_state_model",
+    dataset_version: str = "unversioned",
+    menses_onsets: dict[str, list[date]] | None = None,
+    cycle_lengths: dict[str, int] | None = None,
+) -> list[ParticipantDay]:
+    """Load an mcPHASES root directory into participant-days.
+
+    This is the module-level entry point the training and preparation scripts
+    use. It wraps :class:`McPhasesAdapter` so that callers who only want the
+    participant-day list do not have to know the adapter's lifecycle.
+
+    Args:
+        root: Directory holding the mcPHASES stream tables, or a single CSV.
+        strict: Raise on validation errors instead of recording them as warnings.
+        use: Declared use, checked against the dataset registry. Fails closed.
+        dataset_version: Version string recorded in the processing manifest.
+        menses_onsets: Participant id -> recorded menses onset dates.
+        cycle_lengths: Participant id -> typical cycle length in days.
+
+    Returns:
+        Every participant-day across every stream table found under ``root``.
+
+    Raises:
+        McPhasesDataNotFoundError: If ``root`` does not exist or holds no CSV.
+    """
+    path = Path(root).expanduser()
+    if not path.exists():
+        raise McPhasesDataNotFoundError(
+            f"mcPHASES dataset not found at: {path}\n"
+            "mcPHASES requires credentialed PhysioNet access and is never committed to "
+            "this repository.\n"
+            "Obtain it under its own access terms, store it outside the repository tree, "
+            "then either set PRISM_DATA_ROOT (and export it — nothing auto-loads .env), "
+            "pass --data-root, or set `data.root` in configs/data/mcphases.yaml."
+        )
+
+    files = _stream_files(path)
+    if not files:
+        raise McPhasesDataNotFoundError(
+            f"mcPHASES root '{path}' exists but contains no stream table.\n"
+            f"Expected one of {', '.join(STREAM_FILE_CANDIDATES)} or any *.csv file."
+        )
+
+    days: list[ParticipantDay] = []
+    for file in files:
+        adapter = McPhasesAdapter(dataset_version=dataset_version, use=use)
+        days.extend(
+            adapter.run(
+                file,
+                strict=strict,
+                menses_onsets=menses_onsets,
+                cycle_lengths=cycle_lengths,
+            )
+        )
+    return days
+
+
 def to_frame(days: list[ParticipantDay]) -> pd.DataFrame:
     """Flatten participant-days into a wide DataFrame for inspection."""
     rows: list[dict[str, Any]] = []

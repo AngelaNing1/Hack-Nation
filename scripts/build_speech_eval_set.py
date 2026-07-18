@@ -24,6 +24,12 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from registry.loader import load_variable_registry  # noqa: E402
+from scripts._cli import (  # noqa: E402
+    add_deprecated_alias,
+    add_standard_arguments,
+    make_parser,
+    resolve_output_dir,
+)
 
 REQUIRED_CATEGORIES = {
     "present",
@@ -104,12 +110,30 @@ def write_jsonl(corpus: dict[str, Any], destination: Path) -> int:
     return len(corpus["utterances"])
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(
+        parser,
+        config_default=REPO_ROOT / "configs/data/speech_eval.yaml",
+        data_root=False,
+        seed=False,
+        experiment_id=False,
+        quiet=False,
+    )
+    # '--out' was this script's original name for the JSONL destination.
+    add_deprecated_alias(parser, "--out", dest="output_dir", replacement="--output-dir", type=Path)
+    parser.add_argument(
+        "--min-utterances",
+        type=int,
+        default=50,
+        help="Reject the corpus if it holds fewer utterances than this.",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=REPO_ROOT / "configs/data/speech_eval.yaml")
-    parser.add_argument("--out", type=Path, default=None, help="Override the JSONL destination.")
-    parser.add_argument("--min-utterances", type=int, default=50)
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
 
     config = load_config(args.config)
     corpus_path = REPO_ROOT / config["corpus_path"]
@@ -121,7 +145,17 @@ def main(argv: list[str] | None = None) -> int:
             print(f"ERROR {problem}")
         return 1
 
-    destination = args.out or (REPO_ROOT / config["jsonl_path"])
+    configured = REPO_ROOT / config["jsonl_path"]
+    if args.output_dir is None:
+        destination = configured
+    elif args.output_dir.suffix == ".jsonl":
+        # '--out' historically named the file itself; keep that meaning.
+        destination = args.output_dir
+    else:
+        destination = (
+            resolve_output_dir(config, args.output_dir, experiment_id="speech_eval")
+            / configured.name
+        )
     count = write_jsonl(corpus, destination)
     summary = {
         "corpus_id": corpus["corpus_id"],

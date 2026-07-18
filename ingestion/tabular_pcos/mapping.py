@@ -37,7 +37,7 @@ def normalize_column(column: str) -> str:
 
 #: Source header -> canonical variable code. Keys are written the way they
 #: appear in the wild; lookups are normalized, so case/spacing need not match.
-SOURCE_COLUMN_MAP: dict[str, str] = {
+_SOURCE_COLUMN_CANDIDATES: dict[str, str | None] = {
     # Demographics / anthropometry
     " Age (yrs)": "age",
     "Age (yrs)": "age",
@@ -86,7 +86,9 @@ SOURCE_COLUMN_MAP: dict[str, str] = {
 
 # Drop the placeholder Nones: those headers are excluded, not mapped. Keeping
 # them above documents that we considered them rather than missed them.
-SOURCE_COLUMN_MAP = {k: v for k, v in SOURCE_COLUMN_MAP.items() if v is not None}
+SOURCE_COLUMN_MAP: dict[str, str] = {
+    k: v for k, v in _SOURCE_COLUMN_CANDIDATES.items() if v is not None
+}
 
 #: Source header -> why it is deliberately not ingested.
 EXCLUDED_COLUMNS: dict[str, str] = {

@@ -164,6 +164,40 @@ python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.y
 python scripts/train_temporal.py   --config configs/experiments/exp_dynamic_state.yaml
 ```
 
+All of the above run on committed synthetic fixtures, with no dataset present.
+
+## Command-line conventions
+
+Every script shares one CLI, defined in [`scripts/_cli.py`](scripts/_cli.py):
+
+| Flag | Meaning |
+|:--|:--|
+| `--config PATH` | The experiment or data YAML. The only name for a config. |
+| `--data-root PATH` | Root holding externally obtained datasets. |
+| `--output-dir PATH` | Destination for artifacts. The only name for an output directory. |
+| `--seed INT` | Override the config's seed. |
+| `--experiment-id STR` | Override the config's experiment id. |
+| `--quiet` | Suppress console log echo. |
+
+Settings resolve in one order everywhere:
+
+```
+explicit CLI flag  >  environment variable  >  config file value  >  built-in default
+```
+
+The environment variables are `PRISM_DATA_ROOT` and `PRISM_ARTIFACT_ROOT`, read
+directly from the environment. **Nothing auto-loads `.env`** — source it with
+`set -a; source .env; set +a`, or export the variables yourself. See
+[`.env.example`](.env.example).
+
+Some scripts previously spelled these differently (`--experiment`,
+`--output-root`, `--artifact-dir`). Those names still work as hidden aliases and
+print a deprecation warning; they will be removed in a future release.
+
+`tests/integration/test_cli_contract.py` parses every command in this file, in
+`TRAINING.md`, in `docs/` and in `slurm/*.sbatch`, and fails if any of them names
+a script or a flag that does not exist. Documentation drift is a test failure.
+
 ## Dataset access
 
 No clinical data lives in this repository. The registry at

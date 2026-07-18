@@ -124,7 +124,13 @@ def interval_coverage(
     """
     p = np.asarray(predicted, dtype=float)
     t = np.asarray(truth, dtype=float)
-    s = np.full_like(p, float(sigma)) if np.isscalar(sigma) else np.asarray(sigma, dtype=float)
+    # Broadcast a scalar sigma to one value per point. Going through asarray
+    # first means a plain float, a numpy scalar and a 0-d array all behave the
+    # same; the previous ``np.isscalar`` test let a 0-d array through as a
+    # sequence and then failed on ``s[ok]``.
+    s = np.asarray(sigma, dtype=float)
+    if s.ndim == 0:
+        s = np.full_like(p, float(s.item()))
     ok = np.isfinite(p) & np.isfinite(t) & np.isfinite(s) & (s > 0)
     if not ok.any():
         return {"coverage": float("nan"), "nominal": float(2 * stats.norm.cdf(z) - 1), "n": 0.0}

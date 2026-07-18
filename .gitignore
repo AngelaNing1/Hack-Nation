@@ -22,6 +22,14 @@ site/
 data/
 raw/
 private/
+
+# ...but `data/` also matched `configs/data/`, which holds no data at all — only
+# the YAML that says WHERE data lives. The effect was that every
+# configs/data/*.yaml was untracked, so a fresh clone was missing the configs
+# that README.md, TRAINING.md and the Slurm templates tell people to pass to
+# --config. Re-include the directory; the patterns above still cover any real
+# data directory anywhere else in the tree.
+!configs/data/
 *.dcm
 *.dicom
 *.nii

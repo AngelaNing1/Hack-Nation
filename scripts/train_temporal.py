@@ -43,6 +43,13 @@ from models.temporal.state_model import TemporalStateModel, grouped_participant_
 from schemas.model_output import ExperimentResult, FoldMetrics
 from schemas.patient import SplitManifest
 from schemas.temporal import ParticipantDay
+from scripts._cli import (
+    add_deprecated_alias,
+    add_standard_arguments,
+    make_parser,
+    resolve_output_dir,
+)
+from scripts._experiment_io import resolve_data_root
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_EXPERIMENT = REPO_ROOT / "configs" / "experiments" / "exp_dynamic_state.yaml"
@@ -68,16 +75,32 @@ def _resolve(path_like: str) -> Path:
     return path if path.is_absolute() else REPO_ROOT / path
 
 
-def load_days(data_config: dict[str, Any]) -> tuple[list[ParticipantDay], str]:
-    """Load real participant-days, or synthesise a cohort when absent."""
-    root = REPO_ROOT / str(data_config.get("root", "data/raw/mcphases"))
-    if root.exists():
-        try:
-            from ingestion.mcphases.loader import load_participant_days  # noqa: PLC0415
+def load_days(
+    data_config: dict[str, Any],
+    data_root: str | Path | None = None,
+) -> tuple[list[ParticipantDay], str]:
+    """Load real participant-days, or synthesise a cohort when absent.
 
-            return list(load_participant_days(root)), str(root)
-        except Exception as exc:  # noqa: BLE001 - fall back rather than abort
-            print(f"Could not load {root} ({type(exc).__name__}: {exc}); using synthetic cohort.")
+    A configured-but-unloadable dataset is a hard error. The previous version
+    caught every exception and fell back to synthetic data, which meant a typo
+    in a path — or an import that did not resolve — produced a full run against
+    planted geometry that was labelled as if it had been asked for. Only the
+    *absence* of a configured root is a legitimate reason to synthesise.
+    """
+    root = resolve_data_root(data_config, data_root)
+    if root is not None and root.exists():
+        from ingestion.mcphases.loader import load_participant_days  # noqa: PLC0415
+
+        return list(load_participant_days(root)), str(root)
+
+    if data_root is not None:
+        # An explicit --data-root that does not exist is a mistake, not a cue to
+        # quietly switch to synthetic data.
+        raise FileNotFoundError(
+            f"--data-root '{root}' does not exist.\n"
+            "mcPHASES requires credentialed PhysioNet access and is never committed. "
+            "Omit --data-root to run on the synthetic longitudinal cohort instead."
+        )
 
     from tests.fixtures.synthetic_cycles import generate_cohort  # noqa: PLC0415
 
@@ -90,12 +113,27 @@ def load_days(data_config: dict[str, Any]) -> tuple[list[ParticipantDay], str]:
     return cohort.days, "synthetic_cycles"
 
 
+def _day_key(day: ParticipantDay) -> str:
+    """Label a participant-day exactly as ``TemporalStateModel`` labels its output.
+
+    Must stay in step with ``models/temporal/state_model.py``, which sets
+    ``as_of_date = day.calendar_date or f"study_day_{day.study_day}"``.
+    """
+    return str(day.calendar_date) if day.calendar_date else f"study_day_{day.study_day}"
+
+
 def hormone_evaluation(model: TemporalStateModel, days: list[ParticipantDay]) -> dict[str, float]:
     """Score hormone reconstruction on observed test values only."""
     outputs = model.predict(days)
     if not outputs:
         return {}
-    truth = {(d.participant_id, d.study_day): d for d in days}
+    # Key the truth table the same way the model labels its outputs, rather than
+    # parsing the label back into a study day. TemporalStateModel emits
+    # `calendar_date or f"study_day_{study_day}"`, so real participant-days are
+    # keyed by an ISO date and synthetic ones by "study_day_N". Parsing assumed
+    # the synthetic form and raised ValueError on every real dataset — a path no
+    # test reached, because the synthetic fixture carries no calendar dates.
+    truth = {(d.participant_id, _day_key(d)): d for d in days}
     metrics: dict[str, float] = {}
     by_participant_pred: dict[str, list[float]] = {}
     by_participant_true: dict[str, list[float]] = {}
@@ -106,8 +144,7 @@ def hormone_evaluation(model: TemporalStateModel, days: list[ParticipantDay]) ->
         sigmas: list[float] = []
         residual = model.heads.hormone.residual_std.get(channel, float("nan"))
         for output in outputs:
-            study_day = int(str(output.as_of_date).removeprefix("study_day_") or -1)
-            source = truth.get((output.patient_id, study_day))
+            source = truth.get((output.patient_id, str(output.as_of_date)))
             if source is None or not source.is_observed.get(channel):
                 continue
             value = source.values.get(channel)
@@ -131,15 +168,25 @@ def hormone_evaluation(model: TemporalStateModel, days: list[ParticipantDay]) ->
     return metrics
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(parser, config_default=DEFAULT_EXPERIMENT, quiet=False)
+    # '--experiment' was this script's original name for '--config'.
+    add_deprecated_alias(parser, "--experiment", dest="config", replacement="--config", type=Path)
+    parser.add_argument(
+        "--skip-ablation",
+        action="store_true",
+        help="Skip the missing-modality ablation table.",
+    )
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment", type=Path, default=DEFAULT_EXPERIMENT)
-    parser.add_argument("--output-dir", type=Path, default=None)
-    parser.add_argument("--skip-ablation", action="store_true")
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
 
-    experiment = load_yaml(args.experiment)
+    experiment = load_yaml(args.config)
     data_config = load_yaml(_resolve(experiment.get("data", "configs/data/mcphases.yaml")))
     model_config = load_yaml(_resolve(experiment.get("model", "configs/models/temporal_gru.yaml")))
 
@@ -147,12 +194,18 @@ def main(argv: list[str] | None = None) -> int:
     weights_cfg = model_config.get("loss_weights", {}) or {}
     split_cfg = experiment.get("split", {}) or {}
     seeds = [int(s) for s in experiment.get("seeds", [0])]
-    output_dir = args.output_dir or _resolve(
-        experiment.get("output_dir", "artifacts/experiments/exp_dynamic_state")
-    )
-    output_dir.mkdir(parents=True, exist_ok=True)
+    if args.seed is not None:
+        seeds = [int(args.seed)]
+    experiment_id = args.experiment_id or str(experiment.get("experiment_id", "exp_dynamic_state"))
+    output_dir = resolve_output_dir(experiment, args.output_dir, experiment_id=experiment_id)
 
-    days, source = load_days(data_config)
+    try:
+        days, source = load_days(data_config, args.data_root)
+    except FileNotFoundError as exc:
+        # Actionable message, not a traceback: the user mistyped a path or has
+        # not obtained the dataset, and neither is a programming error.
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
     participants = sorted({d.participant_id for d in days})
     print(f"Loaded {len(days)} participant-days from {len(participants)} participants ({source}).")
 
@@ -220,7 +273,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     manifest = SplitManifest(
-        manifest_id=f"{experiment.get('experiment_id', 'exp_dynamic_state')}_splits",
+        manifest_id=f"{experiment_id}_splits",
         dataset_id=str(data_config.get("dataset_id", "synthetic_cycles")),
         dataset_version=str(data_config.get("dataset_version", "unversioned")),
         strategy="grouped_kfold",
@@ -276,7 +329,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     ExperimentResult(
-        experiment_id=str(experiment.get("experiment_id", "exp_dynamic_state")),
+        experiment_id=experiment_id,
         dataset_version=str(data_config.get("dataset_version", "unversioned")),
         git_commit="unknown",
         model="longitudinal_hormonal_state_model",

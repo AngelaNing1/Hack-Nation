@@ -106,13 +106,19 @@ def encode_document_events(
         if unit:
             structured[f"{code}_unit"] = unit
 
-    embedding = [
-        float(structured[code])
-        if isinstance(structured.get(code), (int, float))
-        and not isinstance(structured.get(code), bool)
-        else 0.0
-        for code in FEATURE_ORDER
-    ]
+    def _numeric_channel(code: str) -> float:
+        """Value channel for one feature; 0.0 stands in for "absent or non-numeric".
+
+        The zero is only interpretable alongside ``presence_mask`` below, which
+        is what distinguishes an absent analyte from a genuine zero reading.
+        Booleans are excluded deliberately: ``True`` is not the number 1 here.
+        """
+        value = structured.get(code)
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return 0.0
+        return float(value)
+
+    embedding = [_numeric_channel(code) for code in FEATURE_ORDER]
     presence_mask = [1.0 if code in structured else 0.0 for code in FEATURE_ORDER]
 
     confidences = [e.extraction_confidence for e in usable]

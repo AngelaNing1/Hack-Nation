@@ -30,6 +30,13 @@ from features.static_features import build_static_features, value_columns_of  # 
 from models.phenotype.domain_scorer import StaticClinicalTokenizer  # noqa: E402
 from models.tabular.masked_autoencoder import MaskedTabularAutoencoder  # noqa: E402
 from schemas.model_output import ExperimentResult, FoldMetrics  # noqa: E402
+from scripts._cli import (  # noqa: E402
+    add_deprecated_alias,
+    add_standard_arguments,
+    make_parser,
+    resolve_output_root,
+    resolve_seed,
+)
 from scripts.train_static_baselines import load_cohort  # noqa: E402
 from training.seeding import derive_seed, seed_everything  # noqa: E402
 from training.splits import (  # noqa: E402
@@ -48,14 +55,25 @@ from training.tracking import (  # noqa: E402
 )
 
 
-def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", required=True, type=Path, help="Path to an experiment YAML.")
-    parser.add_argument("--output-root", type=Path, default=None, help="Override output.root.")
-    parser.add_argument("--experiment-id", type=str, default=None, help="Override experiment_id.")
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(
+        parser,
+        output_help_suffix=(
+            " For this script it is the ROOT under which the run directory is created."
+        ),
+    )
+    # '--output-root' was this script's original name for '--output-dir'.
+    add_deprecated_alias(
+        parser, "--output-root", dest="output_dir", replacement="--output-dir", type=Path
+    )
     parser.add_argument("--no-timestamp", action="store_true", help="Write to an un-stamped dir.")
-    parser.add_argument("--quiet", action="store_true", help="Suppress console log echo.")
-    return parser.parse_args(argv)
+    return parser
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    return build_parser().parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> Path:
@@ -63,11 +81,11 @@ def main(argv: list[str] | None = None) -> Path:
     config = load_config(args.config)
 
     experiment_id = args.experiment_id or config.get("experiment_id", args.config.stem)
-    output_root = args.output_root or config.get("output", {}).get("root", "artifacts/experiments")
+    output_root = resolve_output_root(config, args.output_dir)
     timestamped = not args.no_timestamp and bool(config.get("output", {}).get("timestamped", True))
     experiment_dir = resolve_experiment_dir(output_root, experiment_id, timestamped=timestamped)
 
-    seed = int(config.get("seed", 0))
+    seed = resolve_seed(config, args.seed)
     seed_everything(seed)
 
     tracker = ExperimentTracker(
@@ -77,7 +95,7 @@ def main(argv: list[str] | None = None) -> Path:
         echo=not args.quiet,
     ).start()
 
-    df, dataset_version = load_cohort(config)
+    df, dataset_version = load_cohort(config, args.data_root)
     data_cfg = config.get("data", {})
     id_column = data_cfg.get("id_column", "patient_id")
     label_column = data_cfg.get("label_column", "pcos_binary")

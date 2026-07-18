@@ -162,35 +162,45 @@ circularity and the number will rise for no reason.
 
 ## 6. Step 8 — ultrasound (2D-primary)
 
-Three stages. Do them in order.
-
-### Stage 1 — pretrain on USOVA3D-derived 2D slices
+### What runs today
 
 ```bash
-python scripts/prepare_ultrasound.py --config configs/data/ultrasound.yaml --stage extract_slices
-python scripts/train_ultrasound.py  --config configs/experiments/exp_ultrasound.yaml --stage pretrain_2d
+python scripts/prepare_ultrasound.py --config configs/data/ultrasound.yaml
+python scripts/train_ultrasound.py   --config configs/experiments/exp_ultrasound.yaml
 ```
 
-Extracts 2D slices with ovary/follicle masks from the 3D volumes. Legitimate for
-learning appearance — **but a test set carved from those same volumes is not
-independent 2D evaluation**, and the registry prohibits claiming it is.
-
-### Stage 2 — fine-tune on real 2D scans
+`prepare_ultrasound.py` loads, de-identifies, validates and preprocesses each
+study and writes `prepared_manifest.json` — the audit trail of which studies were
+eligible for measurement at all. `train_ultrasound.py` runs the assembled
+pipeline over the three acquisition pathways and scores each separately:
 
 ```bash
-python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml --stage finetune_2d
+# Score one pathway at a time. Default is all three.
+python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml \
+  --modes single_frame
+python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml \
+  --modes cine_loop volume_3d
 ```
 
-Needs a real 2D transvaginal dataset with a manually labelled subset.
+With no dataset present both run on synthetic phantoms, which is the only mode CI
+uses. The phantoms carry exact ground-truth counts, frame spans, diameters and
+volumes, so the reported numbers are genuine absolute error rather than "it
+completed".
 
-### Stage 3 — cine-loop tracking
+### What does NOT run yet
 
-```bash
-python scripts/train_ultrasound.py --config configs/experiments/exp_ultrasound.yaml --stage cine_tracking
-```
+`configs/models/ultrasound_segmentation.yaml` declares a three-stage training
+strategy under `training.stages` — pretrain on USOVA3D-derived slices, fine-tune
+on real 2D scans, then cine-loop tracking. **That strategy is a declared plan,
+not an implemented one.** `train_ultrasound.py` prints the declared stages and
+then states plainly that no weights are fit; it evaluates the assembled pipeline
+on phantoms. There is no `--stage` flag, and earlier revisions of this document
+described one that never existed.
 
-Matches follicles across adjacent frames so one follicle spanning frames 3–7
-counts **once**.
+Implementing it needs a real 2D transvaginal dataset with a manually labelled
+subset, which this repository does not have. Note also that a test set carved
+from USOVA3D volumes is **not** independent 2D evaluation, and the registry
+prohibits claiming it is.
 
 ### Read the counts correctly
 

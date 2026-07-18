@@ -19,7 +19,7 @@ arrives as a genuine volume.
 USOVA3D is still used, but for what it actually is: one of very few public
 datasets carrying expert ovary **and individual-follicle** labels. It is a
 *pretraining and label resource*, not a model of the clinical input. Its volumes
-are sliced into labelled 2D frames (see [Slice extraction](#usova3d--2d-slice-extraction)).
+are sliced into labelled 2D frames (see [Slice extraction](#usova3d-2d-slice-extraction)).
 
 ### Input priority
 
@@ -258,6 +258,14 @@ slice carries `VOLUME_DERIVED_PROVENANCE` so the caveat survives into artifacts.
 
 Declared in `configs/models/ultrasound_segmentation.yaml`. The ordering follows
 from what data exists.
+
+!!! warning "Declared, not implemented"
+
+    This is a plan, not a capability. `scripts/train_ultrasound.py` prints these
+    stages and then states that no weights are fit — it evaluates the assembled
+    pipeline on phantoms. There is no `--stage` flag. Stage 2 needs a real 2D
+    transvaginal dataset with a manually labelled subset, which this repository
+    does not have.
 
 | Stage | Data | Trains | Why |
 |---|---|---|---|

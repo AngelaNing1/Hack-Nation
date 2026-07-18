@@ -30,6 +30,7 @@ from ingestion.speech.transcription import ScriptedTranscriptionAdapter  # noqa:
 from ingestion.speech.validation import drop_unsupported, validate_extractions  # noqa: E402
 from models.speech.symptom_encoder import encode_speech_events  # noqa: E402
 from schemas.event import HormonalHealthEvent  # noqa: E402
+from scripts._cli import add_standard_arguments, make_parser, resolve_output_dir  # noqa: E402
 
 
 def _gold_records(utterance: dict[str, Any]) -> list[dict[str, Any]]:
@@ -52,8 +53,38 @@ def _gold_records(utterance: dict[str, Any]) -> list[dict[str, Any]]:
     return records
 
 
+def resolve_config(config: dict[str, Any]) -> dict[str, Any]:
+    """Follow an experiment config's ``data_config`` reference, if it has one.
+
+    Two kinds of YAML are valid here and the documented command uses the first:
+
+    * an experiment config (``configs/experiments/exp_speech_extraction.yaml``),
+      which names its corpus indirectly via ``data_config:``;
+    * a data config (``configs/data/speech_eval.yaml``), which holds the corpus
+      settings directly and remains this script's default.
+
+    Previously only the second worked, while README.md and TRAINING.md both
+    documented the first — running it raised ``KeyError: 'corpus_path'``.
+    Data-config keys form the base; the experiment config overrides them, so an
+    experiment can redirect its own outputs without editing shared data settings.
+    """
+    reference = config.get("data_config")
+    if not reference:
+        return config
+
+    path = Path(reference)
+    if not path.is_absolute():
+        path = REPO_ROOT / path
+    with path.open() as fh:
+        base = yaml.safe_load(fh) or {}
+
+    merged = {**base, **config}
+    return merged
+
+
 def run(config: dict[str, Any]) -> dict[str, Any]:
     """Execute the pipeline and return the serializable report."""
+    config = resolve_config(config)
     corpus_path = REPO_ROOT / config["corpus_path"]
     with corpus_path.open() as fh:
         corpus = yaml.safe_load(fh)
@@ -167,19 +198,41 @@ def run(config: dict[str, Any]) -> dict[str, Any]:
     return {"report": report, "token": token, "n_confirmed_events": len(confirmed_events)}
 
 
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    add_standard_arguments(
+        parser,
+        config_default=REPO_ROOT / "configs/data/speech_eval.yaml",
+        data_root=False,
+        seed=False,
+        experiment_id=False,
+        quiet=False,
+    )
+    # File-level overrides. Not deprecated: they name individual files rather
+    # than a directory, and they win over --output-dir when both are given.
+    parser.add_argument("--metrics-out", type=Path, default=None, help="Metrics JSON path.")
+    parser.add_argument("--token-out", type=Path, default=None, help="Symptom token JSON path.")
+    return parser
+
+
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", type=Path, default=REPO_ROOT / "configs/data/speech_eval.yaml")
-    parser.add_argument("--metrics-out", type=Path, default=None)
-    parser.add_argument("--token-out", type=Path, default=None)
-    args = parser.parse_args(argv)
+    args = build_parser().parse_args(argv)
 
     with args.config.open() as fh:
         config = yaml.safe_load(fh)
 
     outcome = run(config)
-    metrics_path = args.metrics_out or (REPO_ROOT / config["output"]["metrics_path"])
-    token_path = args.token_out or (REPO_ROOT / config["output"]["token_path"])
+    output = config.get("output", {}) or {}
+    if args.output_dir is not None:
+        base = resolve_output_dir(config, args.output_dir, experiment_id="speech_extraction")
+        default_metrics = base / Path(output["metrics_path"]).name
+        default_token = base / Path(output["token_path"]).name
+    else:
+        default_metrics = REPO_ROOT / output["metrics_path"]
+        default_token = REPO_ROOT / output["token_path"]
+    metrics_path = args.metrics_out or default_metrics
+    token_path = args.token_out or default_token
 
     metrics_path.parent.mkdir(parents=True, exist_ok=True)
     metrics_path.write_text(

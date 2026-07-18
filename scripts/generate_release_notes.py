@@ -101,11 +101,16 @@ def render(commits: list[tuple[str, str, str]], sensitive: list[str], since: str
     return "\n".join(lines) + "\n"
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=Path("RELEASE_NOTES.md"))
     parser.add_argument("--since", default=None, help="Tag to diff from (default: previous tag).")
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     since = args.since or previous_tag()
     commits = collect_commits(since)

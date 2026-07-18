@@ -8,6 +8,7 @@ a unit error or an unsupported claim reaches a result table.
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
@@ -159,7 +160,13 @@ def validate() -> list[str]:
     return errors
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    return argparse.ArgumentParser(description=__doc__)
+
+
+def main(argv: list[str] | None = None) -> int:
+    build_parser().parse_args(argv)
     errors = validate()
     if errors:
         print(f"\033[31mRegistry validation failed with {len(errors)} error(s):\033[0m")

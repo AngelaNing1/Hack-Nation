@@ -14,7 +14,10 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(REPO_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from scripts._cli import make_parser, resolve_output_dir  # noqa: E402
 
 NON_DIAGNOSTIC = (
     "This model is a research artifact. It does not diagnose any condition, "
@@ -161,13 +164,32 @@ python scripts/<training_script>.py --config {experiment_dir / "config.resolved.
     return output_path
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--experiment-dir", type=Path, required=True)
-    parser.add_argument("--output-dir", type=Path, default=REPO_ROOT / "artifacts" / "model_cards")
-    args = parser.parse_args()
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
+    parser = make_parser(description=__doc__)
+    parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        required=True,
+        help="An artifact directory written by one of the training scripts.",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help=(
+            "Destination directory for the generated card. Falls back to "
+            "$PRISM_ARTIFACT_ROOT, then artifacts/model_cards."
+        ),
+    )
+    return parser
 
-    path = build(args.experiment_dir, args.output_dir)
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
+
+    output_dir = resolve_output_dir({"output": {"dir": "artifacts/model_cards"}}, args.output_dir)
+    path = build(args.experiment_dir, output_dir)
     print(f"Wrote {path}")
     print("Top-level MODEL_CARD.md is human-reviewed and was not modified.")
     return 0

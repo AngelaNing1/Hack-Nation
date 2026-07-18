@@ -214,14 +214,19 @@ def update_file(path: Path, check: bool) -> bool:
     return True
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Build the argument parser. Exposed so the CLI contract test can inspect it."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--check",
         action="store_true",
         help="Fail if generated documentation is stale instead of rewriting it.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = build_parser().parse_args(argv)
 
     changed = [t for t in TARGETS if update_file(REPO_ROOT / t, args.check)]
 
